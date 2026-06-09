@@ -1,0 +1,25 @@
+node_modules
+dist
+out
+build
+.turbo
+.cache
+.vite
+*.log
+.DS_Store
+.env
+.env.local
+coverage
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.tsbuildinfo
+.pnpm-store
+.tmp
+
+# Local planning / agent state
+.claude/
+IMPLEMENTATION_PLAN.md
+REQUIREMENTS.md
+plans/

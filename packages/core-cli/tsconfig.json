@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "lib": ["ES2022"]
+  },
+  "references": [{ "path": "../shared" }, { "path": "../core" }],
+  "include": ["src/**/*"]
+}

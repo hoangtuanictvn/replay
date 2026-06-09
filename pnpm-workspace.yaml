@@ -1,0 +1,11 @@
+packages:
+  - 'packages/*'
+overrides:
+  uuid: ^9.0.1
+  bs58: ^4.0.1
+allowBuilds:
+  '@biomejs/biome': true
+  bufferutil: false
+  esbuild: true
+  utf-8-validate: false
+  electron: true

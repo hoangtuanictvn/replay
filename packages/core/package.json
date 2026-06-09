@@ -1,0 +1,40 @@
+{
+  "name": "@relay/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./svm": {
+      "types": "./dist/svm/index.d.ts",
+      "import": "./dist/svm/index.js"
+    },
+    "./cloner": {
+      "types": "./dist/cloner/index.d.ts",
+      "import": "./dist/cloner/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@relay/shared": "workspace:*",
+    "@solana/web3.js": "^1.95.0",
+    "litesvm": "^0.2.0",
+    "bs58": "^6.0.0",
+    "bn.js": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.0"
+  }
+}
