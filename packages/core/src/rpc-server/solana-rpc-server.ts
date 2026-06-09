@@ -204,6 +204,7 @@ export class SolanaRpcServer {
         };
 
       case 'getLatestBlockhash': {
+        await this.runtime.expireBlockhash(sessionId);
         const bh = await this.runtime.latestBlockhash(sessionId);
         return wrapContext(sessionId, this, {
           blockhash: bh,
@@ -212,6 +213,7 @@ export class SolanaRpcServer {
       }
 
       case 'getRecentBlockhash': {
+        await this.runtime.expireBlockhash(sessionId);
         const bh = await this.runtime.latestBlockhash(sessionId);
         return wrapContext(sessionId, this, {
           blockhash: bh,
@@ -238,6 +240,44 @@ export class SolanaRpcServer {
         const svm = await this.runtime.ensureHydrated(sessionId);
         const acc = svm.getAccount(new PublicKey(pubkey));
         return wrapContext(sessionId, this, acc ? encodeAccount(acc, opts.encoding) : null);
+      }
+
+      case 'getTokenAccountBalance': {
+        const pubkey = expectString(args[0], 'pubkey');
+        const svm = await this.runtime.ensureHydrated(sessionId);
+        const acc = svm.getAccount(new PublicKey(pubkey));
+        if (!acc) throw new InvalidParams( `account ${pubkey} not found`);
+        const data = Buffer.from(acc.data);
+        if (data.length < 72) throw new InvalidParams( 'not a token account');
+        const mint = new PublicKey(data.subarray(0, 32)).toBase58();
+        const amount = data.readBigUInt64LE(64).toString();
+        const mintAcc = svm.getAccount(new PublicKey(mint));
+        const decimals = mintAcc ? Buffer.from(mintAcc.data).readUInt8(44) : 0;
+        const uiAmount = Number(amount) / 10 ** decimals;
+        return wrapContext(sessionId, this, {
+          amount,
+          decimals,
+          uiAmount,
+          uiAmountString: uiAmount.toString(),
+        });
+      }
+
+      case 'getTokenSupply': {
+        const pubkey = expectString(args[0], 'pubkey');
+        const svm = await this.runtime.ensureHydrated(sessionId);
+        const acc = svm.getAccount(new PublicKey(pubkey));
+        if (!acc) throw new InvalidParams( `mint ${pubkey} not found`);
+        const data = Buffer.from(acc.data);
+        if (data.length < 45) throw new InvalidParams( 'not a mint account');
+        const supply = data.readBigUInt64LE(36).toString();
+        const decimals = data.readUInt8(44);
+        const uiAmount = Number(supply) / 10 ** decimals;
+        return wrapContext(sessionId, this, {
+          amount: supply,
+          decimals,
+          uiAmount,
+          uiAmountString: uiAmount.toString(),
+        });
       }
 
       case 'getMultipleAccounts': {

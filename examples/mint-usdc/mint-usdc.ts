@@ -73,14 +73,18 @@ async function main(): Promise<void> {
   console.log(`ata:             ${ata.toBase58()}`);
   console.log(`mint:            ${mint.toBase58()}`);
 
-  // Read balance before (will throw if ATA doesn't exist yet — that's OK)
-  let before = '0';
-  try {
-    const b = await conn.getTokenAccountBalance(ata);
-    before = b.value.uiAmountString ?? '0';
-  } catch {
-    /* ATA doesn't exist yet */
-  }
+  const readUsdcBalance = async (account: PublicKey): Promise<string> => {
+    try {
+      const info = await conn.getAccountInfo(account, 'confirmed');
+      if (!info || info.data.length < 72) return '0';
+      const raw = info.data.readBigUInt64LE(64);
+      return (Number(raw) / 1_000_000).toString();
+    } catch {
+      return '0';
+    }
+  };
+
+  const before = await readUsdcBalance(ata);
   console.log(`balance before:  ${before} USDC`);
 
   // USDC has 6 decimals
@@ -120,8 +124,8 @@ async function main(): Promise<void> {
   });
   console.log(`tx signature:    ${sig}`);
 
-  const after = await conn.getTokenAccountBalance(ata);
-  console.log(`balance after:   ${after.value.uiAmountString ?? '0'} USDC`);
+  const after = await readUsdcBalance(ata);
+  console.log(`balance after:   ${after} USDC`);
   console.log('done.');
 }
 
