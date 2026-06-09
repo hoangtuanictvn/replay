@@ -24,10 +24,11 @@
       "buildResources": "build",
       "output": "release"
     },
+    "asar": false,
     "files": [
       "out/**/*",
       "build/icon.*",
-      "!node_modules/**/*"
+      "package.json"
     ],
     "mac": {
       "icon": "build/icon.icns",
