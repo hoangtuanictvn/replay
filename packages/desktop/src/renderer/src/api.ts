@@ -8,6 +8,10 @@ declare global {
         maximize(): void;
         close(): void;
       };
+      context: {
+        projectRoot: string | null;
+        isWelcome: boolean;
+      };
     };
   }
 }
@@ -17,4 +21,5 @@ export const api = {
     window.relay.call(method, params) as Promise<T>,
   platform: window.relay.platform,
   windowCtl: window.relay.window,
+  context: window.relay.context,
 };

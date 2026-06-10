@@ -11,7 +11,6 @@ import { AddProgramForm } from './features/AddProgramForm';
 import { AttachIdlForm } from './features/AttachIdlForm';
 import { InspectorPane, type InspectorTab } from './features/InspectorPane';
 import { KeypairsPanel } from './features/KeypairsPanel';
-import { NewProjectForm } from './features/NewProjectForm';
 import { NewSessionForm } from './features/NewSessionForm';
 import { PatchAccountForm } from './features/PatchAccountForm';
 import { ReplayPanel } from './features/ReplayPanel';
@@ -64,7 +63,6 @@ export function App(): JSX.Element {
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('builder');
 
   const [modal, setModal] = useState<
-    | 'newProject'
     | 'newSession'
     | 'addProgram'
     | 'addAccount'
@@ -336,7 +334,7 @@ export function App(): JSX.Element {
         id: 'cmd:new-project',
         group: 'Command',
         label: 'New project…',
-        onSelect: () => setModal('newProject'),
+        onSelect: () => void api.call('app.showWelcome'),
       },
       {
         id: 'cmd:new-session',
@@ -835,7 +833,7 @@ export function App(): JSX.Element {
                 style={{ color: 'var(--accent)' }}
                 onClick={() => {
                   setProjectSwitcherOpen(false);
-                  setModal('newProject');
+                  void api.call('app.showWelcome');
                 }}
               >
                 + New project
@@ -1056,7 +1054,7 @@ export function App(): JSX.Element {
                 <div style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 18 }}>
                   Clone Solana programs + accounts. Patch state. Simulate, submit, replay.
                 </div>
-                <button className="primary" onClick={() => setModal('newProject')}>
+                <button className="primary" onClick={() => void api.call('app.showWelcome')}>
                   + Create your first project
                 </button>
                 <div style={{ marginTop: 18, fontSize: 11, color: 'var(--text-dim)' }}>
@@ -1205,16 +1203,6 @@ export function App(): JSX.Element {
       </nav>
 
       {/* Modals */}
-      {modal === 'newProject' && (
-        <Modal onClose={() => setModal(null)}>
-          <NewProjectForm
-            onDone={async () => {
-              setModal(null);
-              await reloadProjects();
-            }}
-          />
-        </Modal>
-      )}
       {modal === 'newSession' && activeProjectId && (
         <Modal onClose={() => setModal(null)}>
           <NewSessionForm

@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   console.log(`balance before:  ${before} USDC`);
 
   // USDC has 6 decimals
-  const rawAmount = wholeAmount * 1_000_000n;
+  const rawAmount = wholeAmount * 1_000_0n;
 
   const tx = new Transaction();
   tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }));

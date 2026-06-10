@@ -3,9 +3,10 @@ import { CoreContext, Dispatcher, buildHandlers, serveOnPort } from '@relay/core
 import { createWorkerSealAdapter } from './worker-seal';
 
 interface WorkerInit {
-  dataDir: string;
+  projectRoot: string;
   defaultRpcUrl: string;
   sealAvailable: boolean;
+  windowId: number;
 }
 
 async function main(): Promise<void> {
@@ -13,7 +14,7 @@ async function main(): Promise<void> {
 
   const init = workerData as WorkerInit;
   const seal = createWorkerSealAdapter(parentPort, init.sealAvailable);
-  const ctx = new CoreContext({ dataDir: init.dataDir, seal });
+  const ctx = new CoreContext({ projectRoot: init.projectRoot, seal });
   await ctx.load();
 
   const dispatcher = new Dispatcher(
@@ -30,7 +31,10 @@ async function main(): Promise<void> {
   );
 
   serveOnPort(parentPort, dispatcher);
-  parentPort.postMessage({ event: 'ready', payload: { pid: process.pid } });
+  parentPort.postMessage({
+    event: 'ready',
+    payload: { pid: process.pid, projectRoot: init.projectRoot, windowId: init.windowId },
+  });
 }
 
 main().catch((err) => {

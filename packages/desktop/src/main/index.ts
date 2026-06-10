@@ -1,59 +1,13 @@
 import { join } from 'node:path';
-import { BrowserWindow, app, ipcMain, shell } from 'electron';
+import { BrowserWindow, Menu, app, ipcMain } from 'electron';
+import { getAppStore } from './app-store';
 import { registerIpc } from './ipc';
-import { awaitReady, setWorkerScriptPath, shutdown, spawnWorker } from './workerMgr';
-
-const isDev =
-  process.env.NODE_ENV === 'development' || process.env.ELECTRON_RENDERER_URL !== undefined;
-
-function createWindow(): BrowserWindow {
-  const isMac = process.platform === 'darwin';
-  const isLinux = process.platform === 'linux';
-  const iconPath = join(
-    __dirname,
-    '../../build',
-    process.platform === 'win32' ? 'icon.ico' : 'icon.png',
-  );
-  const win = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    show: false,
-    autoHideMenuBar: true,
-    icon: iconPath,
-    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
-    trafficLightPosition: isMac ? { x: 14, y: 14 } : undefined,
-    frame: isLinux ? false : undefined,
-    backgroundColor: '#0c0e12',
-    ...(process.platform === 'win32' && {
-      titleBarOverlay: {
-        color: '#0c0e12',
-        symbolColor: '#e4e7ee',
-        height: 40,
-      },
-    }),
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
-  });
-
-  win.on('ready-to-show', () => win.show());
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: 'deny' };
-  });
-
-  if (isDev && process.env.ELECTRON_RENDERER_URL) {
-    void win.loadURL(process.env.ELECTRON_RENDERER_URL);
-    win.webContents.openDevTools({ mode: 'detach' });
-  } else {
-    void win.loadFile(join(__dirname, '../renderer/index.html'));
-  }
-
-  return win;
-}
+import {
+  appHasOpenWindows,
+  focusOrOpenProjectWindow,
+  showWelcomeWindow,
+} from './project-windows';
+import { setWorkerScriptPath, shutdownAll } from './workerMgr';
 
 function registerWindowControls(): void {
   ipcMain.on('relay:window:minimize', (e) => {
@@ -70,25 +24,97 @@ function registerWindowControls(): void {
   });
 }
 
+function buildMenu(): Menu {
+  const isMac = process.platform === 'darwin';
+  const store = getAppStore();
+
+  const recents = store.recentProjects();
+  const recentsSubmenu: Electron.MenuItemConstructorOptions[] = recents.length
+    ? recents.map((r) => ({
+        label: `${r.name}  —  ${r.path}`,
+        click: () => focusOrOpenProjectWindow(r.path).catch((err) => console.error(err)),
+      }))
+    : [{ label: 'No recent projects', enabled: false }];
+
+  const fileMenu: Electron.MenuItemConstructorOptions = {
+    label: 'File',
+    submenu: [
+      {
+        label: 'New Project…',
+        accelerator: 'CmdOrCtrl+Shift+N',
+        click: () => showWelcomeWindow(),
+      },
+      {
+        label: 'Open Project…',
+        accelerator: 'CmdOrCtrl+O',
+        click: () => showWelcomeWindow(),
+      },
+      { type: 'separator' },
+      {
+        label: 'Open Recent',
+        submenu: recentsSubmenu,
+      },
+      { type: 'separator' },
+      {
+        label: 'Close Window',
+        accelerator: 'CmdOrCtrl+W',
+        role: 'close',
+      },
+    ],
+  };
+
+  const template: Electron.MenuItemConstructorOptions[] = [];
+  if (isMac) {
+    template.push({
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    });
+  }
+  template.push(fileMenu);
+  template.push({ role: 'editMenu' });
+  template.push({ role: 'viewMenu' });
+  template.push({ role: 'windowMenu' });
+
+  return Menu.buildFromTemplate(template);
+}
+
+function refreshMenu(): void {
+  Menu.setApplicationMenu(buildMenu());
+}
+
 app.whenReady().then(async () => {
   setWorkerScriptPath(join(__dirname, 'worker.cjs'));
-  spawnWorker();
-  await awaitReady();
+
+  await getAppStore().load();
   registerIpc();
   registerWindowControls();
+  refreshMenu();
 
-  createWindow();
+  // Refresh menu when recents change (every 5 seconds is sufficient; could be event-driven later).
+  setInterval(refreshMenu, 5000);
+
+  showWelcomeWindow();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!appHasOpenWindows()) showWelcomeWindow();
   });
 });
 
 app.on('window-all-closed', async () => {
-  await shutdown();
+  await shutdownAll();
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', async () => {
-  await shutdown();
+  await shutdownAll();
 });

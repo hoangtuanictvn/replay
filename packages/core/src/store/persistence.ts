@@ -1,11 +1,91 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { ErrorCode, RelayError } from '@relay/shared';
-import type { PersistenceSink, StoreSnapshot } from './types.js';
+import type { PersistenceSink, Project, SessionState, StoreSnapshot } from './types.js';
 
 export const STORE_FORMAT_VERSION = 1;
+const MANIFEST_NAME = '.relay.json';
 
+/** Manifest sink: <projectRoot>/.relay.json holding the single Project object. */
+export class ProjectManifestSink {
+  private readonly path: string;
+
+  constructor(projectRoot: string) {
+    this.path = join(projectRoot, MANIFEST_NAME);
+  }
+
+  async load(): Promise<Project | null> {
+    if (!existsSync(this.path)) return null;
+    const raw = await readFile(this.path, 'utf8');
+    const parsed = JSON.parse(raw, reviver) as Project & { formatVersion?: number };
+    if (parsed.formatVersion && parsed.formatVersion !== STORE_FORMAT_VERSION) {
+      throw new RelayError(
+        ErrorCode.INTERNAL,
+        `unsupported manifest formatVersion: ${parsed.formatVersion}`,
+      );
+    }
+    backfill(parsed);
+    return parsed;
+  }
+
+  async save(project: Project): Promise<void> {
+    const dir = dirname(this.path);
+    if (!existsSync(dir)) await mkdir(dir, { recursive: true });
+    const wire = { formatVersion: STORE_FORMAT_VERSION, ...project };
+    const tmp = `${this.path}.tmp`;
+    await writeFile(tmp, JSON.stringify(wire, replacer, 2));
+    await rename(tmp, this.path);
+  }
+}
+
+/** Session sink: <projectRoot>/.relay/sessions/<sessionId>.json — one file per session. */
+export class SessionFolderSink {
+  constructor(private readonly dir: string) {}
+
+  async loadAll(): Promise<SessionState[]> {
+    if (!existsSync(this.dir)) return [];
+    const entries = await readdir(this.dir);
+    const out: SessionState[] = [];
+    for (const e of entries) {
+      if (!e.endsWith('.json')) continue;
+      try {
+        const raw = await readFile(join(this.dir, e), 'utf8');
+        out.push(JSON.parse(raw, reviver) as SessionState);
+      } catch {
+        /* skip corrupt session file */
+      }
+    }
+    return out;
+  }
+
+  async saveAll(sessions: SessionState[]): Promise<void> {
+    if (!existsSync(this.dir)) await mkdir(this.dir, { recursive: true });
+    const wanted = new Set(sessions.map((s) => `${s.id}.json`));
+    for (const s of sessions) {
+      const path = join(this.dir, `${s.id}.json`);
+      const tmp = `${path}.tmp`;
+      await writeFile(tmp, JSON.stringify(s, replacer, 2));
+      await rename(tmp, path);
+    }
+    // Purge stale session files.
+    try {
+      const existing = await readdir(this.dir);
+      for (const f of existing) {
+        if (f.endsWith('.json') && !wanted.has(f)) {
+          await unlink(join(this.dir, f)).catch(() => {});
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
+ * Legacy combined sink — retained only for backwards compat in tests/CLI that pass a
+ * single store.json. New desktop runtime uses ProjectManifestSink + SessionFolderSink.
+ */
 export class JsonFileSink implements PersistenceSink {
   constructor(private readonly path: string) {}
 
@@ -29,6 +109,20 @@ export class JsonFileSink implements PersistenceSink {
     await writeFile(tmp, JSON.stringify(snapshot, replacer, 2));
     await rename(tmp, this.path);
   }
+}
+
+function backfill(p: Project): void {
+  if (!Array.isArray((p as { txTemplates?: unknown }).txTemplates)) {
+    (p as { txTemplates: unknown[] }).txTemplates = [];
+  }
+  if (!Array.isArray((p as { workflows?: unknown }).workflows)) {
+    (p as { workflows: unknown[] }).workflows = [];
+  }
+  if (!Array.isArray(p.patches)) p.patches = [];
+  if (!Array.isArray(p.sessionIds)) p.sessionIds = [];
+  if (!Array.isArray(p.scripts)) p.scripts = [];
+  if (!Array.isArray(p.keypairRefs)) p.keypairRefs = [];
+  if (!p.programs || typeof p.programs !== 'object') p.programs = {};
 }
 
 function replacer(_key: string, value: unknown): unknown {

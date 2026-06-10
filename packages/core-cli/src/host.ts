@@ -3,19 +3,19 @@ import { join } from 'node:path';
 import { CoreContext, Dispatcher, buildHandlers } from '@relay/core';
 
 export interface HostOptions {
-  dataDir?: string;
+  projectRoot?: string;
 }
 
-export function defaultDataDir(): string {
-  return process.env.RELAY_DATA_DIR ?? join(homedir(), '.relay');
+export function defaultProjectRoot(): string {
+  return process.env.RELAY_PROJECT_ROOT ?? join(homedir(), '.relay-cli-project');
 }
 
 export async function createHost(opts: HostOptions = {}): Promise<{
   ctx: CoreContext;
   dispatcher: Dispatcher;
 }> {
-  const dataDir = opts.dataDir ?? defaultDataDir();
-  const ctx = new CoreContext({ dataDir });
+  const projectRoot = opts.projectRoot ?? defaultProjectRoot();
+  const ctx = new CoreContext({ projectRoot });
   await ctx.load();
 
   const dispatcher = new Dispatcher(
